@@ -15,26 +15,40 @@
 #define SERVER_IP_ADDRESS "127.0.0.1"
 #define PORT 5300
 
+// Structure to manage client info
 struct client{
     int uid;
     int client_sock_fd;
 };
 
+// Keep track of FDs of all connected clients
 std::vector<int> sock_fds;
 
-void writeDatatoAllClients(const char *data){
+// Mutex for sync
+pthread_mutex_t sock_fds_mutex PTHREAD_MUTEX_INITIALIZER;
+
+// Broadcasts received messages to all clients
+void broadcastMsg(const char *data, int uid){
+    char message[BUFLEN];
+    snprintf(message, sizeof(message), "User %d says: %s", uid, data);
+
+    pthread_mutex_lock(&sock_fds_mutex);
     for(auto sock_fd : sock_fds){
-        write(sock_fd, data, strlen(data));
+        write(sock_fd, message, strlen(message));
     }
+    pthread_mutex_unlock(&sock_fds_mutex);
 }
 
+// Read data from clients
 void *handleClient(void *client){
     struct client *c = (struct client*)client;
     int sock_fd = c->client_sock_fd;
     int uid = c->uid;
 
     std::cout << "User: " << uid << " joined!\n" << std::endl;
+    pthread_mutex_lock(&sock_fds_mutex);
     sock_fds.push_back(sock_fd);
+    pthread_mutex_unlock(&sock_fds_mutex);
     char r_buff[BUFLEN];
 
     while(1){
@@ -48,11 +62,13 @@ void *handleClient(void *client){
     
         std::cout << "Client "<< uid <<  " says: " << r_buff << std::endl;
 
-        // Write data to all clients
-        writeDatatoAllClients(r_buff);
+        // Broadcast data to all clients
+        broadcastMsg(r_buff, uid);
     }
 
+    pthread_mutex_lock(&sock_fds_mutex);
     sock_fds.erase(std::remove(sock_fds.begin(), sock_fds.end(), sock_fd), sock_fds.end());
+    pthread_mutex_unlock(&sock_fds_mutex);
     close(sock_fd);
     free(c);
     return NULL;

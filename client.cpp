@@ -20,14 +20,17 @@ void *readMessagesFromServer(void *sock_fd_arg){
 
     while(1){
         sleep(2);
+        // Read messages from server and display
         bzero(r_buff, sizeof(r_buff));
         read(*sock_fd, r_buff, sizeof(r_buff));
-        std::cout << "Server messages: \n\n" << std::endl;
+        std::cout << "\n----------------------------------------" << std::endl;
+        std::cout << "\n\nServer messages: \n\n" << std::endl;
         std::cout << r_buff << std::endl;
+        std::cout << "----------------------------------------" << std::endl;
     }
 }
 
-void loop(int sock_fd){
+void chat(int sock_fd){
     char s_buff[BUFLEN];
 
     while(1){
@@ -62,10 +65,13 @@ int main(int agrc, char **argv){
         exit(1);
     }
 
-    pthread_create(&tid, NULL, readMessagesFromServer, &    sock_fd);
-    loop(sock_fd);
+    // Thread to read messages from server
+    pthread_create(&tid, NULL, readMessagesFromServer, &sock_fd);
 
+    // Interact with other connected clients
+    chat(sock_fd);
 
+    // Close fd on disconnecting
     close(sock_fd);
 
     return 0;
