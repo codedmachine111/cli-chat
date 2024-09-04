@@ -17,9 +17,10 @@
 void *readMessagesFromServer(void *sock_fd_arg){
     int *sock_fd = (int *)sock_fd_arg;
     char r_buff[BUFLEN];
+
     while(1){
         sleep(2);
-
+        bzero(r_buff, sizeof(r_buff));
         read(*sock_fd, r_buff, sizeof(r_buff));
         std::cout << "Server messages: \n\n" << std::endl;
         std::cout << r_buff << std::endl;
