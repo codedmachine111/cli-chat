@@ -47,7 +47,12 @@ int main(int agrc, char **argv){
     int sock_fd;
     struct sockaddr_in server;
     pthread_t tid;
-    
+
+    // Get username
+    char username[20];
+    std::cout << "Enter your name: ";
+    fgets(username, sizeof(username), stdin);
+
     // Create a socket
     if((sock_fd = socket(AF_INET, SOCK_STREAM, 0))==-1){
         std::cout << "Failed to create a socket!" << std::endl;
@@ -62,6 +67,12 @@ int main(int agrc, char **argv){
     // Connect to server
     if(connect(sock_fd, (struct sockaddr*)&server, sizeof(server))==-1){
         std::cout << "Failed to connet to server!" << std::endl;
+        exit(1);
+    }
+
+    // Send user details to sever
+    if(write(sock_fd, username, strlen(username))==-1){
+        std::cout << "Failed to register!" << std::endl;
         exit(1);
     }
 

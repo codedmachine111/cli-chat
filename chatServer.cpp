@@ -17,6 +17,7 @@
 
 // Structure to manage client info
 struct client{
+    char username[20];
     int uid;
     int client_sock_fd;
 };
@@ -28,9 +29,9 @@ std::vector<int> sock_fds;
 pthread_mutex_t sock_fds_mutex PTHREAD_MUTEX_INITIALIZER;
 
 // Broadcasts received messages to all clients
-void broadcastMsg(const char *data, int uid){
+void broadcastMsg(const char *data, const char *username){
     char message[BUFLEN];
-    snprintf(message, sizeof(message), "User %d says: %s", uid, data);
+    snprintf(message, sizeof(message), "%s : %s", username, data);
 
     pthread_mutex_lock(&sock_fds_mutex);
     for(auto sock_fd : sock_fds){
@@ -41,11 +42,15 @@ void broadcastMsg(const char *data, int uid){
 
 // Read data from clients
 void *handleClient(void *client){
+    char username[20];
+    bzero(username, sizeof(username));
     struct client *c = (struct client*)client;
     int sock_fd = c->client_sock_fd;
     int uid = c->uid;
+    strcpy(username, c->username);
+    username[strcspn(username, "\n")] = '\0';
 
-    std::cout << "User: " << uid << " joined!\n" << std::endl;
+    std::cout << username << " joined!\n" << std::endl;
     pthread_mutex_lock(&sock_fds_mutex);
     sock_fds.push_back(sock_fd);
     pthread_mutex_unlock(&sock_fds_mutex);
@@ -56,14 +61,14 @@ void *handleClient(void *client){
         bzero(r_buff, sizeof(r_buff));
         int n = read(sock_fd, r_buff, sizeof(r_buff));
         if(n<=0){
-            std::cout << "User " << uid << " disconnected!" << std::endl;
+            std::cout << username << " disconnected!" << std::endl;
             break;
         }
     
-        std::cout << "Client "<< uid <<  " says: " << r_buff << std::endl;
+        std::cout << username <<  " says: " << r_buff << std::endl;
 
         // Broadcast data to all clients
-        broadcastMsg(r_buff, uid);
+        broadcastMsg(r_buff, username);
     }
 
     pthread_mutex_lock(&sock_fds_mutex);
@@ -79,6 +84,7 @@ int main(int argc, char **argv){
 
     int sock_fd, client_fd;
     int yes = 1;
+    char username[20];
 
     srand(time(NULL));
 
@@ -121,11 +127,16 @@ int main(int argc, char **argv){
             exit(1);
         }
 
-        // Assign unique random ID to every client and initialize the structure
+        // Read user details from client
+        bzero(username, sizeof(username));
+        if(read(client_fd, username, sizeof(username))==-1){
+            std::cout << "Failed to read client details!" << std::endl;
+        }
         int uid = rand()%100;
         struct client *c = (struct client *)malloc(sizeof(struct client));
         c->client_sock_fd = client_fd;
         c->uid = uid;
+        strcpy(c->username, username);
 
         // Create a new thread for every client
         pthread_t tid;
