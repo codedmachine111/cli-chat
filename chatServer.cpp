@@ -25,19 +25,43 @@ struct client{
 // Keep track of FDs of all connected clients
 std::vector<int> sock_fds;
 
+// Keep track of all users and their sock_fds
+std::unordered_map<int, int> users;
+
+// Available commands
+const char *commands = {"whisper"};
+
 // Mutex for sync
 pthread_mutex_t sock_fds_mutex PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t users_mutex PTHREAD_MUTEX_INITIALIZER;
 
 // Broadcasts received messages to all clients
-void broadcastMsg(const char *data, const char *username){
+void broadcastMsg(const char *data, const char *username, int uid){
     char message[BUFLEN];
-    snprintf(message, sizeof(message), "%s : %s", username, data);
+    snprintf(message, sizeof(message), "%s [%d]: %s", username, uid, data);
 
     pthread_mutex_lock(&sock_fds_mutex);
     for(auto sock_fd : sock_fds){
         write(sock_fd, message, strlen(message));
     }
     pthread_mutex_unlock(&sock_fds_mutex);
+}
+
+// Whisper private message to a client
+int whisperMsg(int uid, const char *username, const char *private_msg){
+    int sock_fd;
+    char message[BUFLEN];
+    snprintf(message, sizeof(message), "[WHISPER] %s [%d]: %s", username, uid, private_msg);
+
+    pthread_mutex_lock(&users_mutex);
+    sock_fd = users[uid];
+    pthread_mutex_unlock(&users_mutex);
+
+    if(write(sock_fd, message, sizeof(message))==-1){
+        std::cout << "Failed to whisper message to client!" << std::endl;
+        return 0;
+    }
+    return 1;
 }
 
 // Read data from clients
@@ -49,12 +73,14 @@ void *handleClient(void *client){
     int uid = c->uid;
     strcpy(username, c->username);
     username[strcspn(username, "\n")] = '\0';
-
     std::cout << username << " joined!\n" << std::endl;
+
     pthread_mutex_lock(&sock_fds_mutex);
     sock_fds.push_back(sock_fd);
     pthread_mutex_unlock(&sock_fds_mutex);
+
     char r_buff[BUFLEN];
+    char private_msg[BUFLEN];
 
     while(1){
         // Recieve data from a single client
@@ -64,16 +90,49 @@ void *handleClient(void *client){
             std::cout << username << " disconnected!" << std::endl;
             break;
         }
-    
-        std::cout << username <<  " says: " << r_buff << std::endl;
 
-        // Broadcast data to all clients
-        broadcastMsg(r_buff, username);
+        // Command is received
+        if(r_buff[0]=='/'){
+            char command[10];
+            char user_id[10];
+            bzero(private_msg, sizeof(private_msg));
+            
+            char *ptr = r_buff + 1;
+            char *temp;
+            temp = strtok(ptr, " ");
+            int args = 0;
+            while(temp!=NULL){
+                if(args==0){
+                    strcpy(command, temp);
+                    args++;
+                }else if(args==1){
+                    strcpy(user_id, temp);
+                    args++;
+                }else{
+                    strcat(private_msg, temp);
+                    strcat(private_msg, " ");
+                }
+                temp = strtok(NULL, " ");
+            }
+
+            whisperMsg(atoi(user_id), username, private_msg);
+        }else{
+            // Message is received
+            std::cout << username << "[" << uid << "]" <<  " says: " << r_buff << std::endl;
+
+            // Broadcast data to all clients
+            broadcastMsg(r_buff, username, uid);
+        }
     }
 
     pthread_mutex_lock(&sock_fds_mutex);
     sock_fds.erase(std::remove(sock_fds.begin(), sock_fds.end(), sock_fd), sock_fds.end());
     pthread_mutex_unlock(&sock_fds_mutex);
+    
+    pthread_mutex_lock(&users_mutex);
+    users.erase(uid);
+    pthread_mutex_unlock(&users_mutex);
+
     close(sock_fd);
     free(c);
     return NULL;
@@ -137,6 +196,8 @@ int main(int argc, char **argv){
         c->client_sock_fd = client_fd;
         c->uid = uid;
         strcpy(c->username, username);
+        
+        users[uid] = client_fd;
 
         // Create a new thread for every client
         pthread_t tid;

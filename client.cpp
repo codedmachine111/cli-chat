@@ -1,5 +1,6 @@
 #include <iostream>
 #include <unistd.h>
+#include <iomanip>
 #include <bits/stdc++.h>
 
 #include <arpa/inet.h>
@@ -34,9 +35,14 @@ void chat(int sock_fd){
     char s_buff[BUFLEN];
 
     while(1){
-        // Send message to server
+        // Send data to server
         bzero(s_buff, sizeof(s_buff));
-        std::cout << "Enter message to send to server: ";
+        std::cout << "Enter a message or command to send: ";
+        std::cout << "\n*****\n";
+        std::cout << "Available commands: \n" << std::setw(20) << std::endl;
+        std::cout << "/whisper  - " << "Send data to a particular client based on their ID  - [Example usage: /whisper 29 Hello James]" << std::setw(10);
+        std::cout << "\n*****\n";
+
         fgets(s_buff, sizeof(s_buff), stdin);
         write(sock_fd, s_buff, strlen(s_buff));
     }
