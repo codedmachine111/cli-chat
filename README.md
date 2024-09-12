@@ -17,6 +17,8 @@ CLI Chat is a multithreaded chat server that allows multiple clients to connect 
 
 1. Whisper - Private message other connected clients.
    - Example usage: ```/whisper 29 Hello James``` 29 is the uid of the user you want to message privately.
+2. View - View all connected users.
+   - usage: ```/view```
 
 
 ## Installation steps
