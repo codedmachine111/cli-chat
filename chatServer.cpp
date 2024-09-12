@@ -28,12 +28,22 @@ std::vector<int> sock_fds;
 // Keep track of all users and their sock_fds
 std::unordered_map<int, int> users;
 
+std::unordered_map<std::string, int> usernames;
+
 // Available commands
-const char *commands = {"whisper"};
+std::vector<std::string> commands = {"whisper", "view"};
 
 // Mutex for sync
 pthread_mutex_t sock_fds_mutex PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t users_mutex PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t usernames_mutex PTHREAD_MUTEX_INITIALIZER;
+
+// Trims strings of whitespaces
+std::string trim(const std::string& str) {
+    size_t start = str.find_first_not_of(" \n\r\t");
+    size_t end = str.find_last_not_of(" \n\r\t");
+    return (start == std::string::npos || end == std::string::npos) ? "" : str.substr(start, end - start + 1);
+}
 
 // Broadcasts received messages to all clients
 void broadcastMsg(const char *data, const char *username, int uid){
@@ -58,7 +68,40 @@ int whisperMsg(int uid, const char *username, const char *private_msg){
     pthread_mutex_unlock(&users_mutex);
 
     if(write(sock_fd, message, sizeof(message))==-1){
-        std::cout << "Failed to whisper message to client!" << std::endl;
+        std::cout << "Failed to send whisper response message to client!" << std::endl;
+        return 0;
+    }
+    return 1;
+}
+
+int viewAllUsers(int sock_fd){
+    char message[BUFLEN];
+    bzero(message, sizeof(message));
+    strcpy(message, "\nAll connected users:\n");
+
+    pthread_mutex_lock(&usernames_mutex);
+    for(auto it: usernames){
+        char user[100];
+        bzero(user, sizeof(user));
+        snprintf(user, sizeof(user), "%s : %d\n", it.first.c_str(), it.second);
+        strcat(message, user);
+    }
+    pthread_mutex_unlock(&usernames_mutex);
+
+    if(write(sock_fd, message, strlen(message))==-1){
+        std::cout << "Failed to send view clients response to client!" << std::endl;
+        return 0;
+    }
+    return 1;
+}
+
+int sendInvalidCommandError(int sock_fd){
+    char message[BUFLEN];
+    bzero(message, sizeof(message));
+
+    snprintf(message, sizeof(message), "Invalid command!");
+    if(write(sock_fd, message, sizeof(message))==-1){
+        std::cout << "Failed to send invalid command response to client!" << std::endl;
         return 0;
     }
     return 1;
@@ -93,7 +136,6 @@ void *handleClient(void *client){
 
         // Command is received
         if(r_buff[0]=='/'){
-            char command[10];
             char user_id[10];
             bzero(private_msg, sizeof(private_msg));
             
@@ -101,9 +143,11 @@ void *handleClient(void *client){
             char *temp;
             temp = strtok(ptr, " ");
             int args = 0;
+            std::string cmd;
             while(temp!=NULL){
                 if(args==0){
-                    strcpy(command, temp);
+                    cmd = std::string(temp);
+                    cmd = trim(cmd);
                     args++;
                 }else if(args==1){
                     strcpy(user_id, temp);
@@ -115,7 +159,13 @@ void *handleClient(void *client){
                 temp = strtok(NULL, " ");
             }
 
-            whisperMsg(atoi(user_id), username, private_msg);
+            if(cmd=="whisper"){
+                whisperMsg(atoi(user_id), username, private_msg);
+            }else if(cmd=="view"){
+                viewAllUsers(sock_fd);
+            }else{
+                sendInvalidCommandError(sock_fd);
+            }
         }else{
             // Message is received
             std::cout << username << "[" << uid << "]" <<  " says: " << r_buff << std::endl;
@@ -198,6 +248,9 @@ int main(int argc, char **argv){
         strcpy(c->username, username);
         
         users[uid] = client_fd;
+        std::string name = username;
+        name = trim(name);
+        usernames[name] = uid;
 
         // Create a new thread for every client
         pthread_t tid;
