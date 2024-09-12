@@ -39,8 +39,9 @@ void chat(int sock_fd){
         bzero(s_buff, sizeof(s_buff));
         std::cout << "Enter a message or command to send: ";
         std::cout << "\n*****\n";
-        std::cout << "Available commands: \n" << std::setw(20) << std::endl;
-        std::cout << "/whisper  - " << "Send data to a particular client based on their ID  - [Example usage: /whisper 29 Hello James]" << std::setw(10);
+        std::cout << "Available commands: \n" << std::endl;
+        std::cout << "/whisper  - " << "Send data to a particular client based on their ID  - [Example usage: /whisper 29 Hello James]" << std::setw(10) << std::endl;
+        std::cout << "/view  - " << "View all connected clients - [Usage: /view]" << std::setw(10);
         std::cout << "\n*****\n";
 
         fgets(s_buff, sizeof(s_buff), stdin);
